@@ -38,5 +38,10 @@ app.get("/", (req, res) => {
 // APIS
 app.use("/api", require("../src/routes/sellersignup.routes"));
 app.use("/api", require("../src/routes/sellerlogin.routes"));
+app.use("/api", require("../src/routes/addproduct.routes"));
+app.use("/api", require("../src/routes/addtables.routes"));
+app.use("/api", require("../src/routes/qrgeneration.routes"));
+app.use("/api", require("../src/routes/menu.routes"));
+app.use("/api", require("../src/routes/order.routes"));
 
 module.exports = app;
