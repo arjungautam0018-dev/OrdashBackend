@@ -1,41 +1,77 @@
 require("dotenv").config();
 const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const morgan = require("morgan");
-const path = require("path");
+const cors    = require("cors");
+const morgan  = require("morgan");
+const path    = require("path");
 const session = require("express-session");
+const helmet  = require("helmet");
+
+const { generalLimiter, authLimiter, orderLimiter } = require("../src/config/ratelimit.config");
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// ── Security ──────────────────────────────────────────────────────────────────
+// Disable helmet policies that break React Native / mobile clients
+app.use(helmet({
+    crossOriginResourcePolicy: false,   // RN fetches are cross-origin
+    contentSecurityPolicy: false,       // not a browser app
+}));
+
+// ── CORS — allow all origins (mobile app has no origin header) ────────────────
+app.use(cors({
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+}));
+
+// ── Body + static ─────────────────────────────────────────────────────────────
 app.use(express.json());
-app.use(morgan("dev"));
 app.use(express.static(path.join(__dirname, "../public")));
 
-// Session configuration
+// ── Request timing — logs method, path, status and ms for every request ───────
+app.use((req, res, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+        const ms = Date.now() - start;
+        const color = res.statusCode >= 500 ? "\x1b[31m"   // red
+                    : res.statusCode >= 400 ? "\x1b[33m"   // yellow
+                    : res.statusCode >= 200 ? "\x1b[32m"   // green
+                    : "\x1b[0m";
+        console.log(
+            `${color}[api] ${req.method} ${req.originalUrl} → ${res.statusCode} (${ms}ms)\x1b[0m`
+        );
+    });
+    next();
+});
+
+// ── Session ───────────────────────────────────────────────────────────────────
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === "production",
+        secure: false,          // must be false for HTTP (non-HTTPS local dev)
         httpOnly: true,
-        sameSite: "strict",
-        maxAge: 1000 * 60 * 60 * 24
-    }
+        sameSite: "lax",        // "strict" blocks cross-origin — breaks mobile
+        maxAge: 1000 * 60 * 60 * 24,
+    },
 }));
 
-// MongoDB connection
+// ── DB ────────────────────────────────────────────────────────────────────────
 const connectDB = require("../src/config/db.config");
 connectDB();
 
-app.get("/", (req, res) => {
-    res.send("Welcome to the API");
-});
+// ── Health check ──────────────────────────────────────────────────────────────
+app.get("/", (req, res) => res.json({ status: "ok", ts: Date.now() }));
 
-// APIS
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+app.use("/api", generalLimiter);
+app.use("/api/sellersignup", authLimiter);
+app.use("/api/sellerlogin",  authLimiter);
+app.use("/api/order/place",  orderLimiter);
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", require("../src/routes/sellersignup.routes"));
 app.use("/api", require("../src/routes/sellerlogin.routes"));
 app.use("/api", require("../src/routes/addproduct.routes"));
@@ -43,5 +79,11 @@ app.use("/api", require("../src/routes/addtables.routes"));
 app.use("/api", require("../src/routes/qrgeneration.routes"));
 app.use("/api", require("../src/routes/menu.routes"));
 app.use("/api", require("../src/routes/order.routes"));
+
+// ── Global error handler ──────────────────────────────────────────────────────
+app.use((err, req, res, next) => {
+    console.error("[error]", err.message);
+    res.status(500).json({ success: false, message: "Internal server error." });
+});
 
 module.exports = app;

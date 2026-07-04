@@ -1,44 +1,47 @@
-const express = require("express");
-const router = express.Router();
+const express  = require("express");
+const router   = express.Router();
 const SellerAcc = require("../models/selleracc.models");
-const bcrypt = require("bcrypt");
+const bcrypt   = require("bcrypt");
 
-
-
-router.post("/sellerlogin", async(req,res)=>{
-    console.log("Received login request:", req.body);
+// ── POST /api/sellersignup ────────────────────────────────────────────────────
+router.post("/sellersignup", async (req, res) => {
+    console.log("[sellersignup] body:", JSON.stringify(req.body));
     try {
-        const {email, password} = req.body;
-        
-        // Validate input
-        if (!email || !password) {
-            return res.status(400).json({message:"Email and password required"});
+        const { name, phone, email, shopName, city, address, password } = req.body;
+
+        if (!name || !phone || !email || !shopName || !city || !password) {
+            console.warn("[sellersignup] missing fields");
+            return res.status(400).json({ success: false, message: "All required fields must be filled." });
         }
 
-        if (req.session.sellerId) {
-            return res.status(200).json({message:"Already logged in"});
+        // Check duplicate email
+        const exists = await SellerAcc.findOne({ email: email.toLowerCase().trim() }).lean();
+        if (exists) {
+            console.warn("[sellersignup] duplicate email:", email);
+            return res.status(409).json({ success: false, message: "An account with this email already exists." });
         }
 
-        const existingSeller = await SellerAcc.findOne({email});
-        if(!existingSeller){
-            return res.status(400).json({message:"Invalid email or password"});
-        }
+        const hashed = await bcrypt.hash(password, 12);
 
-        const isPasswordValid = await bcrypt.compare(password, existingSeller.password);
-        if(!isPasswordValid){
-            return res.status(400).json({message:"Invalid email or password"});
-        }
-
-        // Create session
-        req.session.sellerId = existingSeller._id;
-        req.session.save((err) => {
-            if (err) console.error("Session save error:", err);
+        const seller = await SellerAcc.create({
+            name:     name.trim(),
+            phone:    phone.trim(),
+            email:    email.toLowerCase().trim(),
+            shopName: shopName.trim(),
+            city:     city.trim(),
+            address:  address?.trim() ?? "",
+            password: hashed,
         });
 
-        res.status(200).json({message:"Login successful"});
-    } catch (error) {
-        console.error("Error occurred while logging in seller:", error);
-        res.status(500).json({message:"Server error"});
+        console.log("[sellersignup] created seller:", seller._id.toString());
+        return res.status(201).json({
+            success: true,
+            message: "Account created successfully.",
+            sellerId: seller._id,
+        });
+    } catch (err) {
+        console.error("[sellersignup] error:", err.message);
+        return res.status(500).json({ success: false, message: "Server error.", detail: err.message });
     }
 });
 

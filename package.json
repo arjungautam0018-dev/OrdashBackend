@@ -19,6 +19,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
     "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.3",
@@ -26,6 +27,7 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "qrcode": "^1.5.4",
+    "socket.io": "^4.8.3",
     "streamifier": "^0.1.1"
   },
   "devDependencies": {
