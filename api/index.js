@@ -46,15 +46,16 @@ app.use((req, res, next) => {
 });
 
 // ── Session ───────────────────────────────────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
 app.use(session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false,          // must be false for HTTP (non-HTTPS local dev)
+        secure: isProduction,           // HTTPS only in prod, HTTP ok in dev
         httpOnly: true,
-        sameSite: "lax",        // "strict" blocks cross-origin — breaks mobile
-        maxAge: 1000 * 60 * 60 * 24,
+        sameSite: isProduction ? "none" : "lax",  // "none" needed for cross-origin mobile in prod
+        maxAge: 7 * 24 * 60 * 60 * 1000,          // 7 days — matches frontend assumption
     },
 }));
 

@@ -1,29 +1,54 @@
 const express  = require("express");
 const router   = express.Router();
-const Order      = require("../models/order.models");
-const HotelTables = require("../models/table.models");
-const auth       = require("../config/userauth.config");
+const Order        = require("../models/order.models");
+const HotelTables  = require("../models/table.models");
+const HotelProducts = require("../models/products.models");
+const auth         = require("../config/userauth.config");
 const { emitNewOrder, emitOrderStatus, emitTableOrderStatus, emitBillRequest } = require("../config/socket.config");
 
 // ── POST /api/order/place ─────────────────────────────────────────────────────
 // Public — called by customer
 router.post("/order/place", async (req, res) => {
     try {
-        const { sellerId, tableId, items, total } = req.body;
-        console.log("[order/place] body:", JSON.stringify({ sellerId, tableId, total, itemCount: items?.length }));
+        const { sellerId, tableId, items } = req.body;
+        console.log("[order/place] body:", JSON.stringify({ sellerId, tableId, itemCount: items?.length }));
 
-        if (!sellerId || !tableId || !items?.length || total == null) {
+        if (!sellerId || !tableId || !items?.length) {
             console.warn("[order/place] validation failed");
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
-        const order = await Order.create({ seller: sellerId, tableId, items, total });
-        console.log("[order/place] created:", order._id.toString());
-
-        // Get table name to enrich the socket payload for the seller
+        // Validate that the table belongs to this seller
         const hotelDoc = await HotelTables.findOne({ seller: sellerId }, { tables: 1 }).lean();
         const table = hotelDoc?.tables?.find(t => t._id.toString() === tableId.toString());
-        const enriched = { ...order.toObject(), tableName: table?.name ?? "Unknown" };
+        if (!table) {
+            return res.status(400).json({ success: false, message: "Invalid tableId for this seller." });
+        }
+
+        // Fetch products and recalculate total server-side — never trust client price
+        const productIds = items.map(i => i.productId);
+        const hotelProducts = await HotelProducts.findOne(
+            { seller: sellerId },
+            { products: 1 }
+        ).lean();
+
+        const productMap = {};
+        hotelProducts?.products?.forEach(p => { productMap[p._id.toString()] = p.price; });
+
+        let total = 0;
+        for (const item of items) {
+            const realPrice = productMap[item.productId?.toString()];
+            if (realPrice == null) {
+                return res.status(400).json({ success: false, message: `Product not found: ${item.productId}` });
+            }
+            total += realPrice * item.quantity;
+        }
+
+        const order = await Order.create({ seller: sellerId, tableId, items, total });
+        console.log("[order/place] created:", order._id.toString(), "total:", total);
+
+        // Get table name to enrich the socket payload for the seller
+        const enriched = { ...order.toObject(), tableName: table.name };
 
         // Push to seller's socket room immediately — no polling needed
         emitNewOrder(sellerId, enriched);
@@ -116,7 +141,7 @@ router.patch("/order/:orderId/status", auth, async (req, res) => {
     }
 });
 
-module.exports = router;
+// ── POST /api/order/:orderId/bill ─────────────────────────────────────────────
 // Public — customer requests the bill
 router.post("/order/:orderId/bill", async (req, res) => {
     try {
