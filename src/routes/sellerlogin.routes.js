@@ -2,6 +2,8 @@ const express  = require("express");
 const router   = express.Router();
 const SellerAcc = require("../models/selleracc.models");
 const bcrypt   = require("bcrypt");
+const jwt      = require("jsonwebtoken");
+const verifyAuth = require("../config/userauth.config");
 
 // ── POST /api/sellerlogin ─────────────────────────────────────────────────────
 router.post("/sellerlogin", async (req, res) => {
@@ -33,10 +35,18 @@ router.post("/sellerlogin", async (req, res) => {
             if (err) console.error("[sellerlogin] session save error:", err);
         });
 
+        // Issue JWT — React Native can't reliably persist cookies cross-origin
+        const token = jwt.sign(
+            { id: seller._id.toString() },
+            process.env.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
         console.log("[sellerlogin] success:", seller._id.toString());
         return res.status(200).json({
             success: true,
             message: "Login successful.",
+            token,
             seller: {
                 sellerId: seller._id,
                 name:     seller.name,
@@ -52,14 +62,10 @@ router.post("/sellerlogin", async (req, res) => {
 });
 
 // ── GET /api/sellerprofile ────────────────────────────────────────────────────
-router.get("/sellerprofile", async (req, res) => {
-    if (!req.session.sellerId) {
-        return res.status(401).json({ success: false, message: "Not logged in." });
-    }
+router.get("/sellerprofile", verifyAuth, async (req, res) => {
     try {
-        const seller = await SellerAcc.findById(req.session.sellerId, { password: 0 }).lean();
+        const seller = await SellerAcc.findById(req.user.id, { password: 0 }).lean();
         if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
-
         return res.status(200).json({ success: true, seller });
     } catch (err) {
         console.error("[sellerprofile] error:", err.message);
@@ -68,18 +74,16 @@ router.get("/sellerprofile", async (req, res) => {
 });
 
 // ── POST /api/logout ──────────────────────────────────────────────────────────
+// For JWT clients, logout is handled client-side (delete token from AsyncStorage).
+// We still destroy the server session if one exists.
 router.post("/logout", (req, res) => {
-    if (!req.session.sellerId) {
-        return res.status(401).json({ success: false, message: "Not logged in." });
+    if (req.session?.sellerId) {
+        req.session.destroy((err) => {
+            if (err) console.error("[logout] session destroy error:", err);
+        });
     }
-    req.session.destroy((err) => {
-        if (err) {
-            console.error("[logout] session destroy error:", err);
-            return res.status(500).json({ success: false, message: "Logout failed." });
-        }
-        console.log("[logout] session destroyed");
-        return res.status(200).json({ success: true, message: "Logged out." });
-    });
+    console.log("[logout] completed");
+    return res.status(200).json({ success: true, message: "Logged out." });
 });
 
 module.exports = router;
