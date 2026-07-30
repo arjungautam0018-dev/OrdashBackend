@@ -1,30 +1,41 @@
 const mongoose = require("mongoose");
 
 const accountsData = new mongoose.Schema({
-    name:{
-        type:String,
-        required:true,
-        trim:true,
+    accountName: {
+        type: String,
+        trim: true,
+        default: null,
     },
-    role:{
-        type:String,
-        enum:["Admin", "Waiter", "Chef", "Cashier"],
-        required:true,
+    phone: {
+        type: String,
+        trim: true,
+        default: null,
     },
-    password:{
-        type:String,
-        required:true,
+    email: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        default: null,
+    },
+    role: {
+        type: String,
+        enum: ["Admin", "Waiter", "Chef", "Cashier"],
+        required: true,
+    },
+    password: {
+        type: String,
+        required: true,
     },
 });
 
 const Accounts = new mongoose.Schema({
-    seller:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"SellerAcc",
-        required:true,
-        unique:true,
+    seller: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "SellerAcc",
+        required: true,
+        unique: true,
     },
-    accounts:[accountsData],
+    accounts: [accountsData],
 });
 
 const AccountsModel = mongoose.model("Accounts", Accounts);

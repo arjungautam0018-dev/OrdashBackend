@@ -10,22 +10,29 @@ router.post("/account/create", auth, async(req,res)=>{
     console.log("Create account request received", req.body);
     try{
         const sellerId = req.user.id;
-        const { name, role, password } = req.body;
+        const { accountName, phone, email, role, password } = req.body;
 
-        if(!name || !name.trim()){
-            return res.status(400).json({message: "Name is required"});
+        if (!accountName || !accountName.trim()) {
+            return res.status(400).json({ message: "Account name is required" });
         }
-        if(!role || !["Admin", "Waiter", "Chef", "Cashier"].includes(role)){
-            return res.status(400).json({message: "Invalid role"});
+        if (!phone && !email) {
+            return res.status(400).json({ message: "Phone number or email is required" });
         }
-        if(!password || password.length < 6){
-            return res.status(400).json({message: "Password must be at least 6 characters"});
+        if (!role || !["Admin", "Waiter", "Chef", "Cashier"].includes(role)) {
+            return res.status(400).json({ message: "Invalid role" });
         }
-
-        const newAccount = { name: name.trim(), role, password };
+        if (!password || password.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
 
         const crypted_pass = await bcrypt.hash(password, 10);
-        const accountWithHashedPassword = { ...newAccount, password: crypted_pass };
+        const accountWithHashedPassword = {
+            accountName: accountName.trim(),
+            phone: phone?.trim() || null,
+            email: email?.trim().toLowerCase() || null,
+            role,
+            password: crypted_pass,
+        };
 
         // Check if the seller already has an account document
         let accountsDoc = await AccountsModel.findOne({seller:sellerId});
@@ -46,7 +53,7 @@ router.post("/account/create", auth, async(req,res)=>{
             await accountsDoc.save();
             console.log("New account document created for seller:", sellerId);
         }
-        return res.status(201).json({message: "Account created successfully", account: {name, role}});
+        return res.status(201).json({ message: "Account created successfully", account: { accountName, role } });
 
     }
     catch(error){
@@ -64,7 +71,13 @@ router.get("/account/all", auth , async(req,res)=>{
         if(!accountsDoc){
             return res.status(404).json({message: "No accounts found for this seller"});
         }
-        const accounts = accountsDoc.accounts.map(acc => ({name: acc.name, role: acc.role}));
+        const accounts = accountsDoc.accounts.map(acc => ({
+            id:          acc._id,
+            accountName: acc.accountName,
+            phone:       acc.phone,
+            email:       acc.email,
+            role:        acc.role,
+        }));
         return res.status(200).json({accounts});
         
     }
@@ -72,6 +85,76 @@ router.get("/account/all", auth , async(req,res)=>{
         console.error("Error fetching accounts:", error.message);
         res.status(500).json({message: "Error fetching accounts"});
     }
+});
+
+// Delete an account
+router.delete("/account/delete/:id", auth , async(req,res)=>{
+    console.log("Delete account request received for ID:", req.params.id);
+    try{
+        const sellerId = req.user.id;
+        const accountId = req.params.id;
+
+        const result = await AccountsModel.updateOne(
+            {seller:sellerId},
+            {
+                $pull: { accounts: { _id: accountId } }
+
+            }
+        )
+        if(result.modifiedCount === 0){
+            return res.status(404).json({message: "Account not found"});
+        }
+        return res.status(200).json({message: "Account deleted successfully"});
+
+    }
+    catch(error){
+        console.error("Error deleting account:", error.message);
+        res.status(500).json({message: "Error deleting account"});
+    }
+
 })
+// Update an account
+router.put("/account/update/:id", auth, async (req, res) => {
+    console.log("Update account request received for ID:", req.params.id);
+    try {
+        const sellerId = req.user.id;
+        const accountId = req.params.id;
+        const { accountName, role, phone, password } = req.body;
+
+        if (!accountName || !accountName.trim()) {
+            return res.status(400).json({ message: "Account name is required" });
+        }
+        if (!role || !["Admin", "Waiter", "Chef", "Cashier"].includes(role)) {
+            return res.status(400).json({ message: "Invalid role" });
+        }
+        if (password && password.length < 6) {
+            return res.status(400).json({ message: "Password must be at least 6 characters" });
+        }
+
+        const fields = {
+            "accounts.$.accountName": accountName.trim(),
+            "accounts.$.role": role,
+            ...(phone && { "accounts.$.phone": phone.trim() }),
+        };
+
+        if (password) {
+            fields["accounts.$.password"] = await bcrypt.hash(password, 10);
+        }
+
+        const result = await AccountsModel.updateOne(
+            { seller: sellerId, "accounts._id": accountId },
+            { $set: fields }
+        );
+
+        if (result.modifiedCount === 0) {
+            return res.status(404).json({ message: "Account not found" });
+        }
+        return res.status(200).json({ message: "Account updated successfully" });
+    } catch (error) {
+        console.error("Error updating account:", error.message);
+        res.status(500).json({ message: "Error updating account" });
+    }
+});
+
 module.exports = router;
 
