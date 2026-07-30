@@ -80,6 +80,8 @@ app.use("/api", require("../src/routes/addtables.routes"));
 app.use("/api", require("../src/routes/qrgeneration.routes"));
 app.use("/api", require("../src/routes/menu.routes"));
 app.use("/api", require("../src/routes/order.routes"));
+app.use("/api", require("../src/routes/createaccount.routes"));
+
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
