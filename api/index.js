@@ -72,6 +72,12 @@ app.use("/api/sellersignup", authLimiter);
 app.use("/api/sellerlogin",  authLimiter);
 app.use("/api/order/place",  orderLimiter);
 
+// Uptime Robot for constant run
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api", require("../src/routes/sellersignup.routes"));
 app.use("/api", require("../src/routes/sellerlogin.routes"));
