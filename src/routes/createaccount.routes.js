@@ -7,7 +7,6 @@ const bcrypt = require("bcrypt");
 // Post /api/createaccount 
 
 router.post("/account/create", auth, async(req,res)=>{
-    console.log("Create account request received", req.body);
     try{
         const sellerId = req.user.id;
         const { accountName, phone, email, role, password } = req.body;
@@ -41,7 +40,6 @@ router.post("/account/create", auth, async(req,res)=>{
         if(accountsDoc){
             accountsDoc.accounts.push(accountWithHashedPassword);
             await accountsDoc.save();
-            console.log("New account added for seller:", sellerId);
 
         }
         else{
@@ -51,7 +49,6 @@ router.post("/account/create", auth, async(req,res)=>{
                 accounts: [accountWithHashedPassword]
             });
             await accountsDoc.save();
-            console.log("New account document created for seller:", sellerId);
         }
         return res.status(201).json({ message: "Account created successfully", account: { accountName, role } });
 
@@ -64,7 +61,6 @@ router.post("/account/create", auth, async(req,res)=>{
 
 // Fetch the data
 router.get("/account/all", auth , async(req,res)=>{
-    console.log("Fetch all accounts request received");
     try{
         const sellerId = req.user.id;
         const accountsDoc = await AccountsModel.findOne({seller:sellerId});
@@ -89,7 +85,6 @@ router.get("/account/all", auth , async(req,res)=>{
 
 // Delete an account
 router.delete("/account/delete/:id", auth , async(req,res)=>{
-    console.log("Delete account request received for ID:", req.params.id);
     try{
         const sellerId = req.user.id;
         const accountId = req.params.id;
@@ -115,7 +110,6 @@ router.delete("/account/delete/:id", auth , async(req,res)=>{
 })
 // Update an account
 router.put("/account/update/:id", auth, async (req, res) => {
-    console.log("Update account request received for ID:", req.params.id);
     try {
         const sellerId = req.user.id;
         const accountId = req.params.id;

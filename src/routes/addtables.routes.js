@@ -2,6 +2,10 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../config/userauth.config");
 const HotelTables = require("../models/table.models");
+const SellerAcc = require("../models/selleracc.models");
+
+// ── Helper: generate unique 6-char alphanumeric code ─────────────────────────
+const generateCode = () => Math.random().toString(36).substring(2, 8).toUpperCase();
 
 // ── POST /api/table/add ───────────────────────────────────────────────────────
 router.post("/table/add", auth, async (req, res) => {
@@ -18,7 +22,7 @@ router.post("/table/add", auth, async (req, res) => {
             return res.status(400).json({ success: false, message: "Capacity must be a number greater than 0." });
         }
 
-        const newTable = { name: name.trim(), capacity: cap };
+        const newTable = { name: name.trim(), capacity: cap, code: generateCode() };
 
         const hotelDoc = await HotelTables.findOneAndUpdate(
             { seller: sellerId },
@@ -27,7 +31,6 @@ router.post("/table/add", auth, async (req, res) => {
         );
 
         const added = hotelDoc.tables[hotelDoc.tables.length - 1];
-
         return res.status(201).json({ success: true, message: "Table added.", table: added });
     } catch (error) {
         console.error("Add table error:", error.message);
@@ -42,6 +45,46 @@ router.get("/table/all", auth, async (req, res) => {
         return res.status(200).json({ success: true, tables: hotelDoc ? hotelDoc.tables : [] });
     } catch (error) {
         console.error("Get tables error:", error.message);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+});
+
+// ── POST /api/table/code ──────────────────────────────────────────────────────
+// Public — customer/waiter enters code printed on table to identify it
+// Body: { code }
+// Returns: { sellerId, tableId, tableName, shopName }
+router.post("/table/code", async (req, res) => {
+    try {
+        const { code } = req.body;
+        if (!code || !code.trim()) {
+            return res.status(400).json({ success: false, message: "Code is required." });
+        }
+
+        // Find the HotelTables doc that has a table with this code
+        const hotelDoc = await HotelTables.findOne({
+            "tables.code": code.trim().toUpperCase(),
+        }).lean();
+
+        if (!hotelDoc) {
+            return res.status(404).json({ success: false, message: "Invalid code. No table found." });
+        }
+
+        const table = hotelDoc.tables.find(
+            t => t.code === code.trim().toUpperCase()
+        );
+
+        // Get shop name from seller account
+        const seller = await SellerAcc.findById(hotelDoc.seller, { shopName: 1 }).lean();
+
+        return res.status(200).json({
+            success: true,
+            sellerId: hotelDoc.seller,
+            tableId: table._id,
+            tableName: table.name,
+            shopName: seller?.shopName ?? "Restaurant",
+        });
+    } catch (error) {
+        console.error("Table code lookup error:", error.message);
         return res.status(500).json({ success: false, message: "Server error." });
     }
 });
@@ -78,7 +121,6 @@ router.put("/table/update/:tableId", auth, async (req, res) => {
 
 // ── DELETE /api/table/delete/:tableId ────────────────────────────────────────
 router.delete("/table/delete/:tableId", auth, async (req, res) => {
-    console.log("Delete table api hit");
     try {
         const sellerId = req.user.id;
         const { tableId } = req.params;

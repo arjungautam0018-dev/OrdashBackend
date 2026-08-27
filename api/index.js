@@ -5,6 +5,8 @@ const morgan  = require("morgan");
 const path    = require("path");
 const session = require("express-session");
 const helmet  = require("helmet");
+const apiTimer = require("../src/middlewares/response.middlewares");
+
 
 const { generalLimiter, authLimiter, orderLimiter } = require("../src/config/ratelimit.config");
 
@@ -30,20 +32,8 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
 // ── Request timing — logs method, path, status and ms for every request ───────
-app.use((req, res, next) => {
-    const start = Date.now();
-    res.on("finish", () => {
-        const ms = Date.now() - start;
-        const color = res.statusCode >= 500 ? "\x1b[31m"   // red
-                    : res.statusCode >= 400 ? "\x1b[33m"   // yellow
-                    : res.statusCode >= 200 ? "\x1b[32m"   // green
-                    : "\x1b[0m";
-        console.log(
-            `${color}[api] ${req.method} ${req.originalUrl} → ${res.statusCode} (${ms}ms)\x1b[0m`
-        );
-    });
-    next();
-});
+app.use(apiTimer);
+
 
 // ── Session ───────────────────────────────────────────────────────────────────
 const isProduction = process.env.NODE_ENV === "production";
@@ -72,6 +62,22 @@ app.use("/api/sellersignup", authLimiter);
 app.use("/api/sellerlogin",  authLimiter);
 app.use("/api/order/place",  orderLimiter);
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Enabled only in production.
+// Local load testing can therefore measure the backend without rate limiting.
+// if (isProduction) {
+//     const {
+//         generalLimiter,
+//         authLimiter,
+//         orderLimiter
+//     } = require("../src/config/ratelimit.config");
+
+//     app.use("/api", generalLimiter);
+//     app.use("/api/sellersignup", authLimiter);
+//     app.use("/api/sellerlogin", authLimiter);
+//     app.use("/api/order/place", orderLimiter);
+// }
+
 // Uptime Robot for constant run
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
@@ -87,6 +93,8 @@ app.use("/api", require("../src/routes/qrgeneration.routes"));
 app.use("/api", require("../src/routes/menu.routes"));
 app.use("/api", require("../src/routes/order.routes"));
 app.use("/api", require("../src/routes/createaccount.routes"));
+app.use("/api", require("../src/routes/event.routes"));
+
 
 
 // ── Global error handler ──────────────────────────────────────────────────────

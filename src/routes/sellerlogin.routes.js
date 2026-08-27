@@ -8,7 +8,6 @@ const AccountsModel = require("../models/accounts.models");
 
 // ── POST /api/sellerlogin ─────────────────────────────────────────────────────
 router.post("/sellerlogin", async (req, res) => {
-    console.log("[sellerlogin] attempt:", req.body?.email || req.body?.name);
     try {
         const { email, phone, password } = req.body;
 
@@ -36,7 +35,6 @@ router.post("/sellerlogin", async (req, res) => {
                     { expiresIn: "7d" }
                 );
 
-                console.log("[sellerlogin] admin success:", seller._id.toString());
                 return res.status(200).json({
                     success: true,
                     message: "Login successful.",
@@ -94,7 +92,6 @@ router.post("/sellerlogin", async (req, res) => {
                 { expiresIn: "7d" }
             );
 
-            console.log("[sellerlogin] sub-account success:", subAccount._id.toString(), "→ seller:", sellerId);
             return res.status(200).json({
                 success: true,
                 message: "Login successful.",
@@ -140,7 +137,6 @@ router.post("/logout", (req, res) => {
             if (err) console.error("[logout] session destroy error:", err);
         });
     }
-    console.log("[logout] completed");
     return res.status(200).json({ success: true, message: "Logged out." });
 });
 

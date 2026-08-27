@@ -5,19 +5,16 @@ const bcrypt   = require("bcrypt");
 
 // ── POST /api/sellersignup ────────────────────────────────────────────────────
 router.post("/sellersignup", async (req, res) => {
-    console.log("[sellersignup] body:", JSON.stringify(req.body));
     try {
         const { name, phone, email, shopName, city, address, password } = req.body;
 
         if (!name || !phone || !email || !shopName || !city || !password) {
-            console.warn("[sellersignup] missing fields");
             return res.status(400).json({ success: false, message: "All required fields must be filled." });
         }
 
         // Check duplicate email
         const exists = await SellerAcc.findOne({ email: email.toLowerCase().trim() }).lean();
         if (exists) {
-            console.warn("[sellersignup] duplicate email:", email);
             return res.status(409).json({ success: false, message: "An account with this email already exists." });
         }
 
@@ -33,7 +30,6 @@ router.post("/sellersignup", async (req, res) => {
             password: hashed,
         });
 
-        console.log("[sellersignup] created seller:", seller._id.toString());
         return res.status(201).json({
             success: true,
             message: "Account created successfully.",

@@ -9,6 +9,11 @@ const tableSchema = new mongoose.Schema({
     capacity: {
         type: Number,
         required: true,
+    },
+    code:{
+        type: String,
+        required: true,
+        unique: true,
     }
 });
 

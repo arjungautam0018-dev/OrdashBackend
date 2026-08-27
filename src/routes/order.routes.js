@@ -4,17 +4,16 @@ const Order        = require("../models/order.models");
 const HotelTables  = require("../models/table.models");
 const HotelProducts = require("../models/products.models");
 const auth         = require("../config/userauth.config");
-const { emitNewOrder, emitOrderStatus, emitTableOrderStatus, emitBillRequest } = require("../config/socket.config");
+const {redisPublish} = require("../config/redis.config");
+
 
 // ── POST /api/order/place ─────────────────────────────────────────────────────
 // Public — called by customer
 router.post("/order/place", async (req, res) => {
     try {
         const { sellerId, tableId, items } = req.body;
-        console.log("[order/place] body:", JSON.stringify({ sellerId, tableId, itemCount: items?.length }));
 
         if (!sellerId || !tableId || !items?.length) {
-            console.warn("[order/place] validation failed");
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
@@ -45,13 +44,14 @@ router.post("/order/place", async (req, res) => {
         }
 
         const order = await Order.create({ seller: sellerId, tableId, items, total });
-        console.log("[order/place] created:", order._id.toString(), "total:", total);
 
-        // Get table name to enrich the socket payload for the seller
+        // Get table name to enrich the payload for the seller
         const enriched = { ...order.toObject(), tableName: table.name };
 
-        // Push to seller's socket room immediately — no polling needed
-        emitNewOrder(sellerId, enriched);
+        // Publish to redis channels for seller and table
+        redisPublish(`seller:${sellerId}` , {event: "order:new", order:enriched});
+        redisPublish(`table:${sellerId}:${tableId}`, {event:"order:new", order:enriched});
+
 
         return res.status(201).json({ success: true, message: "Order placed.", order: enriched });
     } catch (err) {
@@ -130,9 +130,9 @@ router.patch("/order/:orderId/status", auth, async (req, res) => {
             return res.status(404).json({ success: false, message: "Order not found." });
         }
 
-        // Push status change to seller room AND customer table room
-        emitOrderStatus(sellerId, orderId, status);
-        emitTableOrderStatus(sellerId, order.tableId?.toString(), orderId, status);
+        redisPublish(`seller:${sellerId}`, {event:"order:status", orderId , status});
+        redisPublish(`table:${sellerId}:${order.tableId}`, {event:"order:status", orderId , status});
+
 
         return res.status(200).json({ success: true, order });
     } catch (err) {
@@ -155,7 +155,7 @@ router.post("/order/:orderId/bill", async (req, res) => {
         const table = hotelDoc?.tables?.find(t => t._id.toString() === order.tableId?.toString());
         const tableName = table?.name ?? "Unknown";
 
-        emitBillRequest(order.seller.toString(), order.tableId?.toString(), tableName);
+        redisPublish(`seller:${order.seller}`, { event: "order:bill", tableId: order.tableId, tableName });
 
         return res.status(200).json({ success: true, message: "Bill requested." });
     } catch (err) {
