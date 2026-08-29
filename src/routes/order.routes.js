@@ -13,7 +13,7 @@ router.post("/order/place", async (req, res) => {
     try {
         const { sellerId, tableId, items } = req.body;
 
-        if (!sellerId || !tableId || !items?.length) {
+        if (!sellerId || !tableId || !items?.length || req.body.sessionId == null) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
 
@@ -43,7 +43,7 @@ router.post("/order/place", async (req, res) => {
             total += realPrice * item.quantity;
         }
 
-        const order = await Order.create({ seller: sellerId, tableId, items, total });
+        const order = await Order.create({ seller: sellerId, tableId, items, total, sessionId: req.body.sessionId });
 
         // Get table name to enrich the payload for the seller
         const enriched = { ...order.toObject(), tableName: table.name };
@@ -64,15 +64,16 @@ router.post("/order/place", async (req, res) => {
 // Public — customer polls their own table's orders
 router.get("/order/table", async (req, res) => {
     try {
-        const { sellerId, tableId } = req.query;
-        if (!sellerId || !tableId) {
-            return res.status(400).json({ success: false, message: "sellerId and tableId are required." });
+        const { sellerId, tableId, sessionId} = req.query;
+        if (!sellerId || !tableId || !sessionId) {
+            return res.status(400).json({ success: false, message: "sellerId and tableId and sessionId are required." });
         }
 
         const orders = await Order
-            .find({ seller: sellerId, tableId })
+            .find({ seller: sellerId, tableId, sessionId })
             .sort({ createdAt: -1 })
-            .lean();          // plain objects — no Mongoose overhead
+            .lean();
+
 
         return res.status(200).json({ success: true, orders });
     } catch (err) {
@@ -82,7 +83,7 @@ router.get("/order/table", async (req, res) => {
 });
 
 // ── GET /api/order/seller ─────────────────────────────────────────────────────
-// Auth — seller initial load (socket handles live updates after this)
+// Auth — seller fetches all their orders on initial load
 router.get("/order/seller", auth, async (req, res) => {
     try {
         const sellerId = req.user.id;
@@ -108,7 +109,7 @@ router.get("/order/seller", auth, async (req, res) => {
 });
 
 // ── PATCH /api/order/:orderId/status ─────────────────────────────────────────
-// Auth — seller updates status; socket pushes change to seller + customer rooms
+// Auth — seller updates status; Redis SSE pushes change to seller + customer
 router.patch("/order/:orderId/status", auth, async (req, res) => {
     try {
         const sellerId  = req.user.id;

@@ -17,6 +17,7 @@ const orderSchema = new mongoose.Schema({
         enum: ["pending", "confirmed", "preparing", "ready", "done"],
         default: "pending",
     },
+    sessionId: {type:String,required:true},
 }, { timestamps: true });
 
 const Order = mongoose.model("Order", orderSchema);
