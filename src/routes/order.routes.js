@@ -12,10 +12,13 @@ const {redisPublish} = require("../config/redis.config");
 router.post("/order/place", async (req, res) => {
     try {
         const { sellerId, tableId, items } = req.body;
-
-        if (!sellerId || !tableId || !items?.length || req.body.sessionId == null) {
+        console.log("[order/place] received:", { sellerId, tableId, items, sessionId: req.body.sessionId });
+        if (!sellerId || !tableId || !items?.length) {
             return res.status(400).json({ success: false, message: "Missing required fields." });
         }
+
+        // sessionId is optional — staff-placed orders use sentinel "staff"
+        const sessionId = req.body.sessionId || "staff";
 
         // Validate that the table belongs to this seller
         const hotelDoc = await HotelTables.findOne({ seller: sellerId }, { tables: 1 }).lean();
@@ -43,7 +46,7 @@ router.post("/order/place", async (req, res) => {
             total += realPrice * item.quantity;
         }
 
-        const order = await Order.create({ seller: sellerId, tableId, items, total, sessionId: req.body.sessionId });
+        const order = await Order.create({ seller: sellerId, tableId, items, total, sessionId });
 
         // Get table name to enrich the payload for the seller
         const enriched = { ...order.toObject(), tableName: table.name };
