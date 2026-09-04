@@ -41,11 +41,10 @@ const uploadToCloudinary = (buffer, folder = "products") =>
     });
 
 // ── POST /api/product/add ─────────────────────────────────────────────────────
-// Accepts multipart/form-data: { name, price, category, type, quantity?, image? }
-router.post("/product/add", auth, upload.single("image"), async (req, res) => {
+router.post("/product/add", auth, async (req, res) => {
     try {
         const sellerId = req.user.id;
-        const { name, price, category, type, quantity } = req.body;
+        const { name, price, category, type, quantity, imageBase64 } = req.body;
 
         if (!name || price === undefined || !category || !type) {
             return res.status(400).json({
@@ -70,8 +69,8 @@ router.post("/product/add", auth, upload.single("image"), async (req, res) => {
 
         // Upload image to Cloudinary if provided
         let imageUrl = null;
-        if (req.file) {
-            const result = await uploadToCloudinary(req.file.buffer);
+        if (imageBase64) {
+            const result = await uploadToCloudinary(Buffer.from(imageBase64, "base64"));
             imageUrl = result.secure_url;
         }
 
@@ -98,10 +97,6 @@ router.post("/product/add", auth, upload.single("image"), async (req, res) => {
             product: added,
         });
     } catch (error) {
-        // Multer file type error
-        if (error.message && error.message.includes("Only JPG")) {
-            return res.status(400).json({ success: false, message: error.message });
-        }
         console.error("Add product error:", error.message);
         return res.status(500).json({ success: false, message: "Server error. Please try again." });
     }
@@ -167,11 +162,13 @@ router.get("/product/all", auth, async (req, res) => {
 });
 
 // ── PUT /api/product/update/:productId ───────────────────────────────────────
-router.put("/product/update/:productId", auth, upload.single("image"), async (req, res) => {
+router.put("/product/update/:productId", auth, async (req, res) => {
     try {
+        console.log("Update product request body:", req.body);
+        
         const sellerId = req.user.id;
         const { productId } = req.params;
-        const { name, price, category, quantity } = req.body;
+        const { name, price, category, quantity, imageBase64 } = req.body;
 
         const hotelDoc = await HotelProducts.findOne({ seller: sellerId });
         if (!hotelDoc) return res.status(404).json({ success: false, message: "No products found." });
@@ -184,8 +181,8 @@ router.put("/product/update/:productId", auth, upload.single("image"), async (re
         if (category) product.category = category.trim();
         if (quantity !== undefined && product.type === "product") product.quantity = Number(quantity);
 
-        if (req.file) {
-            const result = await uploadToCloudinary(req.file.buffer);
+        if (imageBase64) {
+            const result = await uploadToCloudinary(Buffer.from(imageBase64, "base64"));
             product.image = result.secure_url;
         }
 

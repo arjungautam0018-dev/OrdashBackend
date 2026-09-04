@@ -28,7 +28,7 @@ app.use(cors({
 }));
 
 // ── Body + static ─────────────────────────────────────────────────────────────
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(express.static(path.join(__dirname, "../public")));
 
 // ── Request timing — logs method, path, status and ms for every request ───────

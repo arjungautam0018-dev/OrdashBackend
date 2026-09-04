@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {redisCLient} = require("../config/redis.config");
+const {redisClient} = require("../config/redis.config");
 
 // GET /api/events/seller/:sellerId
 // For chef/waiter dashboard order updates
@@ -16,7 +16,7 @@ router.get("/events/seller/:sellerId", async(req,res)=>{
             "Connection":"keep-alive"
         });
         res.flushHeaders();
-        const subscriber = redisCLient.duplicate();
+        const subscriber = redisClient.duplicate();
 
         subscriber.subscribe(channel, (err)=>{
             if(err) console.error(`[SSE] subscribe error for ${channel}:`, err.message);
@@ -51,7 +51,7 @@ router.get("/events/table/:sellerId/:tableId", async (req, res) => {
         });
         res.flushHeaders();
 
-        const subscriber = redisCLient.duplicate();
+        const subscriber = redisClient.duplicate();
 
         subscriber.subscribe(channel, (err) => {
             if (err) console.error(`[SSE] subscribe error for ${channel}:`, err.message);

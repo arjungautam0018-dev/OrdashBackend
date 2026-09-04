@@ -5,6 +5,18 @@ const bcrypt   = require("bcrypt");
 const jwt      = require("jsonwebtoken");
 const verifyAuth = require("../config/userauth.config");
 const AccountsModel = require("../models/accounts.models");
+const multer = require("multer");
+const cloudinary = require("../config/cloudinary.config");
+const streamifier = require("streamifier");
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+        allowed.includes(file.mimetype) ? cb(null, true) : cb(new Error("Only JPG, PNG and WEBP allowed."));
+    },
+});
+
 
 // ── POST /api/sellerlogin ─────────────────────────────────────────────────────
 router.post("/sellerlogin", async (req, res) => {
@@ -115,18 +127,84 @@ router.post("/sellerlogin", async (req, res) => {
         return res.status(500).json({ success: false, message: "Server error." });
     }
 });
-
-// ── GET /api/sellerprofile ────────────────────────────────────────────────────
-router.get("/sellerprofile", verifyAuth, async (req, res) => {
+// ── GET /api/seller/profile ───────────────────────────────────────────────────
+router.get("/seller/profile", verifyAuth, async (req, res) => {
     try {
-        const seller = await SellerAcc.findById(req.user.id, { password: 0 }).lean();
+        const seller = await SellerAcc.findById(req.user.id).select("-password").lean();
         if (!seller) return res.status(404).json({ success: false, message: "Seller not found." });
         return res.status(200).json({ success: true, seller });
     } catch (err) {
-        console.error("[sellerprofile] error:", err.message);
+        console.error("[seller/profile GET]", err.message);
         return res.status(500).json({ success: false, message: "Server error." });
     }
 });
+
+// ── PATCH /api/sellerprofile ──────────────────────────────────────────────────
+router.patch("/seller/profile/update", verifyAuth, async (req, res) => {
+    try {
+        const allowed = ["name", "phone", "shopName", "city", "address", "profilePic", "bio"];
+        const updates = {};
+        for (const key of allowed) {
+            if (req.body[key] !== undefined) updates[key] = req.body[key];
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return res.status(400).json({ success: false, message: "No valid fields to update." });
+        }
+
+        const seller = await SellerAcc.findByIdAndUpdate(
+            req.user.id,
+            { $set: updates },
+            { new: true }
+        ).select("-password").lean();
+
+        return res.status(200).json({ success: true, seller });
+    } catch (err) {
+        console.error("[sellerprofile patch] error:", err.message);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+});
+
+// Logo post
+// ── POST /api/seller/logo ─────────────────────────────────────────────────────
+router.post("/seller/logo", verifyAuth, async (req, res) => {
+    try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64) return res.status(400).json({ success: false, message: "No image provided." });
+
+        // Destroy old logo
+        const existing = await SellerAcc.findById(req.user.id, { profilePic: 1 }).lean();
+        if (existing?.profilePic) {
+            try {
+                const parts    = existing.profilePic.split("/");
+                const filename = parts[parts.length - 1].split(".")[0];
+                const folder   = parts[parts.length - 2];
+                await cloudinary.uploader.destroy(`${folder}/${filename}`);
+            } catch (e) {
+                console.error("[seller/logo] destroy error:", e.message);
+            }
+        }
+
+        // Upload base64 to Cloudinary
+        const result = await cloudinary.uploader.upload(
+            `data:image/jpeg;base64,${imageBase64}`,
+            {
+                folder: "seller_logos",
+                transformation: [
+                    { width: 400, height: 400, crop: "fill", gravity: "auto" },
+                    { quality: "auto", fetch_format: "auto" },
+                ],
+            }
+        );
+
+        await SellerAcc.findByIdAndUpdate(req.user.id, { profilePic: result.secure_url });
+        return res.status(200).json({ success: true, url: result.secure_url });
+    } catch (err) {
+        console.error("[seller/logo]", err.message);
+        return res.status(500).json({ success: false, message: "Server error." });
+    }
+});
+
 
 // ── POST /api/logout ──────────────────────────────────────────────────────────
 // For JWT clients, logout is handled client-side (delete token from AsyncStorage).
