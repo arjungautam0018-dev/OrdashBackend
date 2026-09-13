@@ -7,7 +7,10 @@ const PYTHON_URL = process.env.PYTHON_SERVICE_URL;
 // ── Proxy helper ──────────────────────────────────────────────────────────────
 const proxy = async (res, path) => {
     try {
-        const r    = await fetch(`${PYTHON_URL}${path}`);
+        const url = `${PYTHON_URL}${path}`;
+        console.log(`[analytics proxy] → ${url}`);
+        const r    = await fetch(url);
+        console.log(`[analytics proxy] ← ${r.status} ${url}`);
         const data = await r.json();
         return res.json(data);
     } catch (err) {
