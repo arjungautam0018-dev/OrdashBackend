@@ -46,7 +46,7 @@ router.post("/order/place", async (req, res) => {
             total += realPrice * item.quantity;
         }
 
-        const order = await Order.create({ seller: sellerId, tableId, items, total, sessionId });
+        const order = await Order.create({ seller: sellerId, tableId, tableName: table.name, items, total, sessionId });
 
         // Get table name to enrich the payload for the seller
         const enriched = { ...order.toObject(), tableName: table.name };

@@ -10,6 +10,7 @@ const orderItemSchema = new mongoose.Schema({
 const orderSchema = new mongoose.Schema({
     seller:  { type: mongoose.Schema.Types.ObjectId, ref: "SellerAcc", required: true },
     tableId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    tableName: { type: String, default: "Unknown" },
     items:   { type: [orderItemSchema], required: true },
     total:   { type: Number, required: true },
     status:  {
