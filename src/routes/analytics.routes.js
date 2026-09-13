@@ -2,7 +2,7 @@ const express = require("express");
 const router  = require("express").Router();
 const auth    = require("../config/userauth.config");
 
-const PYTHON_URL = process.env.PYTHON_SERVICE_URL || "http://localhost:8000";
+const PYTHON_URL = process.env.PYTHON_SERVICE_URL;
 
 // ── Proxy helper ──────────────────────────────────────────────────────────────
 const proxy = async (res, path) => {
