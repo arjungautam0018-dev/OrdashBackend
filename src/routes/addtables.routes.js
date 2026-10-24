@@ -42,7 +42,13 @@ router.post("/table/add", auth, async (req, res) => {
 router.get("/table/all", auth, async (req, res) => {
     try {
         const hotelDoc = await HotelTables.findOne({ seller: req.user.id });
-        return res.status(200).json({ success: true, tables: hotelDoc ? hotelDoc.tables : [] });
+        // Include sellerId so the waiter "Select Table" flow can resolve the seller
+        // without depending on a separate profile lookup (consistent with qr/code paths).
+        return res.status(200).json({
+            success: true,
+            sellerId: req.user.id,
+            tables: hotelDoc ? hotelDoc.tables : [],
+        });
     } catch (error) {
         console.error("Get tables error:", error.message);
         return res.status(500).json({ success: false, message: "Server error." });

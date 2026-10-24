@@ -12,6 +12,9 @@ const { generalLimiter, authLimiter, orderLimiter } = require("../src/config/rat
 
 const app = express();
 
+// Trust Render/Vercel proxy so express-rate-limit gets the real client IP
+app.set("trust proxy", 1);
+
 // ── Security ──────────────────────────────────────────────────────────────────
 // Disable helmet policies that break React Native / mobile clients
 app.use(helmet({
