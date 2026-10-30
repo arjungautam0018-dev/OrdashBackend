@@ -98,6 +98,7 @@ app.use("/api", require("../src/routes/order.routes"));
 app.use("/api", require("../src/routes/createaccount.routes"));
 app.use("/api", require("../src/routes/analytics.routes"));
 app.use("/api", require("../src/routes/event.routes"));
+app.use("/api", require("../src/routes/push.routes"));
 
 
 

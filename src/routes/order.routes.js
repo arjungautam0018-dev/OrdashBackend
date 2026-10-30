@@ -5,6 +5,11 @@ const HotelTables  = require("../models/table.models");
 const HotelProducts = require("../models/products.models");
 const auth         = require("../config/userauth.config");
 const {redisPublish} = require("../config/redis.config");
+const {
+    notifyOrderPlaced,
+    notifyOrderStatus,
+    notifyBillRequested,
+} = require("../config/push.config");
 
 
 // ── POST /api/order/place ─────────────────────────────────────────────────────
@@ -54,6 +59,9 @@ router.post("/order/place", async (req, res) => {
         // Publish to redis channels for seller and table
         redisPublish(`seller:${sellerId}` , {event: "order:new", order:enriched});
         redisPublish(`table:${sellerId}:${tableId}`, {event:"order:new", order:enriched});
+
+        // Push notification (best-effort, never blocks the response)
+        notifyOrderPlaced({ sellerId, orderId: order._id }).catch(() => {});
 
 
         return res.status(201).json({ success: true, message: "Order placed.", order: enriched });
@@ -137,6 +145,16 @@ router.patch("/order/:orderId/status", auth, async (req, res) => {
         redisPublish(`seller:${sellerId}`, {event:"order:status", orderId , status});
         redisPublish(`table:${sellerId}:${order.tableId}`, {event:"order:status", orderId , status});
 
+        // Push notification to the customer at that table + concerned seller roles
+        notifyOrderStatus({
+            sellerId,
+            tableId:   order.tableId,
+            sessionId: order.sessionId,
+            orderId,
+            status,
+            tableName: order.tableName,
+        }).catch(() => {});
+
 
         return res.status(200).json({ success: true, order });
     } catch (err) {
@@ -160,6 +178,9 @@ router.post("/order/:orderId/bill", async (req, res) => {
         const tableName = table?.name ?? "Unknown";
 
         redisPublish(`seller:${order.seller}`, { event: "order:bill", tableId: order.tableId, tableName });
+
+        // Push notification to cashier + admin
+        notifyBillRequested({ sellerId: order.seller, tableId: order.tableId, tableName }).catch(() => {});
 
         return res.status(200).json({ success: true, message: "Bill requested." });
     } catch (err) {
